@@ -31,7 +31,11 @@ jobs:
 
       - name: Create Xcode project from app sources
         run: |
-          toolchain create YTStudioPro com.chouvip.ytstudiopro
+          mkdir -p app_src
+          cp main.py ytb_core.py studio_core.py app_src/
+          toolchain create YTStudioPro app_src
+          grep -rl "org.kivy.ytstudiopro" ytstudiopro-ios | while read f; do sed -i '' 's/org.kivy.ytstudiopro/com.chouvip.ytstudiopro/g' "$f"; done
+          grep -rh -A1 CFBundleIdentifier ytstudiopro-ios --include="*-Info.plist" | head -4
 
       - name: Install pure-Python packages into the app
         run: |
