@@ -25,11 +25,14 @@ jobs:
           cython --version
       - name: Build Python + Kivy for iOS (toolchain)
         run: |
-          toolchain build python3 kivy pyobjus openssl sqlite3 requests
+          toolchain build python3 kivy pyobjus openssl
       - name: Create Xcode project from app sources
         run: |
           toolchain create YTStudioPro com.chouvip.ytstudiopro
-      - name: Set app icon (CHOUVIP)
+      - name: Install pure-Python packages into the app
+        run: |
+          toolchain pip install requests deep-translator
+          - name: Set app icon (CHOUVIP)
         run: |
           python3 set_icon.py . icon.png
       - name: Build unsigned .app with Xcode
