@@ -171,7 +171,8 @@ class TButton(Button):
                                                 self.height, self.radius_dp),
                              width=1.1)
         self.bind(pos=self._redraw, size=self._redraw, state=self._redraw)
-        self.bind(size=lambda w, s: setattr(w, "text_size", (s[0] - dp(24), None)))
+        self._ts_lambda = lambda w, s: setattr(w, "text_size", (s[0] - dp(24), None))
+        self.bind(size=self._ts_lambda)
         self._redraw()
 
     def _show_border(self):
@@ -203,12 +204,26 @@ class TabButton(TButton):
         super().__init__(text=text, variant="tab", **kw)
         self.height = dp(38)
         self.font_size = sp(14)
-        # size ONCE from the natural texture; never bind texture->width
-        # (combined with the size->text_size binding that loops forever,
-        # growing the pill without bound — seen in headless screenshots)
+        # Width must follow the NATURAL (unconstrained) texture and keep
+        # following it: on iOS the first texture_update() during __init__
+        # can return a near-empty texture (font not warm yet), which made
+        # one-time sizing collapse the pills into circles with the label
+        # wrapping letter by letter (seen on the real device). With
+        # text_size unconstrained the texture size is constant, so this
+        # binding converges and self-heals when the real texture lands.
+        self.unbind(size=self._ts_lambda)
+        self.text_size = (None, None)
+        self.bind(texture_size=lambda w, s: setattr(w, "width", s[0] + dp(30)))
         self.texture_update()
-        self.width = self.texture_size[0] + dp(30)
+        # deferred re-fit: by 0.25s/1s the font pipeline is warm and the
+        # texture holds its true size even if it was a placeholder at init
+        Clock.schedule_once(lambda dt: self._fit_width(), 0.25)
+        Clock.schedule_once(lambda dt: self._fit_width(), 1.0)
         self._redraw()
+
+    def _fit_width(self):
+        if self.texture_size[0]:
+            self.width = self.texture_size[0] + dp(30)
 
     def _show_border(self):
         return not self.active_tab
@@ -406,9 +421,9 @@ def I(hint="", multiline=False, password=False, height=None, text=""):
 def scroll_page():
     root = BoxLayout(orientation="vertical")
     paint_bg(root, C_BG)
-    sv = ScrollView(size_hint=(1, 1), bar_width=dp(4),
-                    bar_color=(C_ACCENT[0], C_ACCENT[1], C_ACCENT[2], 0.55),
-                    bar_inactive_color=(C_BORDER[0], C_BORDER[1], C_BORDER[2], 0.5),
+    sv = ScrollView(size_hint=(1, 1), bar_width=dp(3),
+                    bar_color=(C_ACCENT[0], C_ACCENT[1], C_ACCENT[2], 0.35),
+                    bar_inactive_color=(C_BORDER[0], C_BORDER[1], C_BORDER[2], 0.35),
                     scroll_type=["bars", "content"])
     page = BoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(14),
                      padding=[dp(14), dp(14), dp(14), dp(22)])
@@ -523,6 +538,37 @@ class StudioApp(App):
         self.sm.current = name
         for k, btn in getattr(self, "tab_btns", {}).items():
             btn.set_active(k == name)
+        tsv = getattr(self, "tab_scroll", None)
+        btn = getattr(self, "tab_btns", {}).get(name)
+        if tsv is not None and btn is not None:
+            try:
+                tsv.scroll_to(btn, padding=dp(12))
+            except Exception:
+                pass
+
+    # ---------- app lifecycle ----------
+    def on_pause(self):
+        return True
+
+    def on_resume(self):
+        # kivy-ios can come back from background with a stale/black
+        # framebuffer (chrome redraws, screen content stays black).
+        # Force a full redraw of every canvas a moment after resume.
+        Clock.schedule_once(lambda dt: self._force_redraw(), 0.05)
+        Clock.schedule_once(lambda dt: self._force_redraw(), 0.35)
+
+    def _force_redraw(self):
+        try:
+            Window.canvas.ask_update()
+            root = getattr(self, "root", None)
+            if root is not None:
+                for w in root.walk():
+                    try:
+                        w.canvas.ask_update()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
     # ---------- build ----------
     def build(self):
@@ -594,6 +640,7 @@ class StudioApp(App):
             trow.add_widget(b)
             self.tab_btns[name] = b
         tsv.add_widget(trow)
+        self.tab_scroll = tsv
         root.add_widget(tsv)
 
         self.sm = ScreenManager()
