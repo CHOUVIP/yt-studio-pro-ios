@@ -23,7 +23,7 @@ jobs:
           pip install kivy-ios pillow
       - name: Build Python + Kivy for iOS (toolchain)
         run: |
-          toolchain build python3 kivy openssl sqlite3 requests
+          toolchain build python3 kivy pyobjus openssl sqlite3 requests
       - name: Create Xcode project from app sources
         run: |
           toolchain create YTStudioPro com.chouvip.ytstudiopro
