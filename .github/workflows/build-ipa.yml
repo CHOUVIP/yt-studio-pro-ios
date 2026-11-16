@@ -4,6 +4,12 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+    paths:
+      - main.py
+      - ytb_core.py
+      - studio_core.py
+      - set_icon.py
+      - icon.png
 
 jobs:
   build:
@@ -25,6 +31,16 @@ jobs:
           python -m pip install cython kivy-ios pillow
           which cython pkg-config autoconf automake libtool
           cython --version
+      - name: Cache compiled Kivy toolchain (build/ + dist/)
+        uses: actions/cache@v4
+        with:
+          path: |
+            build
+            dist
+          key: kivy-ios-toolchain-v1-macos15-py311-python3-kivy-pyobjus-openssl
+          restore-keys: |
+            kivy-ios-toolchain-v1-macos15-
+
       - name: Build Python + Kivy for iOS (toolchain)
         run: |
           toolchain build python3 kivy pyobjus openssl
