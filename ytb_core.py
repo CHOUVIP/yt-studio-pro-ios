@@ -252,7 +252,8 @@ def fetch_fallback(video_id, session=None):
                      note="Chưa có YouTube API Key: lấy được tiêu đề/mô tả gốc và ĐÃ nhận diện ngôn ngữ gốc từ chính tiêu đề, nhưng KHÔNG liệt kê được hết ngôn ngữ đã add trong Studio. Hãy nhập YouTube Data API v3 Key ở tab API để xác minh chính xác 100%.")
 
 def fetch_video(video_id_or_url, youtube_api_key=""):
-    vid = extract_video_id(video_id_or_url) or video_id_or_url.strip()
+    youtube_api_key = youtube_api_key or ""
+    vid = extract_video_id(video_id_or_url) or (video_id_or_url or "").strip()
     if youtube_api_key.strip():
         return fetch_with_youtube_api(vid, youtube_api_key.strip())
     return fetch_fallback(vid)

@@ -519,7 +519,7 @@ class StudioApp(App):
                 r = fn()
             except Exception as e:
                 traceback.print_exc()
-                self.log(f"{fail_prefix} {e}")
+                self.log(f"Lỗi {type(e).__name__}: {e}")
                 return
             if done:
                 Clock.schedule_once(lambda dt: done(r))
@@ -548,6 +548,15 @@ class StudioApp(App):
 
     # ---------- app lifecycle ----------
     def on_pause(self):
+        # keep the user's working text across background kills/restarts
+        try:
+            if hasattr(self, "in_links"):
+                self.cfg["links_text"] = self.in_links.text
+            if hasattr(self, "in_custom"):
+                self.cfg["custom_text"] = self.in_custom.text
+            self.save_cfg()
+        except Exception:
+            pass
         return True
 
     def on_resume(self):
@@ -690,6 +699,7 @@ class StudioApp(App):
         self.in_paste = I("Nếu Safari không tự quay lại: dán LINK chứa code= vào đây", multiline=True, height=110)
         c2.add_widget(self.in_paste)
         c2.add_widget(B("✅ Dán code xong — hoàn tất đăng nhập", self.act_paste_code))
+        c2.add_widget(B("📋 Dán từ bộ nhớ & hoàn tất luôn", self.act_paste_code_clip))
         c2.add_widget(B("Đăng xuất", self.act_logout))
 
         c3 = card(p, "Ngách & sản phẩm")
@@ -776,6 +786,40 @@ class StudioApp(App):
         self.refresh_login_label()
         self.log("Đã đăng xuất")
 
+    # ---------- clipboard paste (long-press paste is flaky in Kivy/iOS) ----------
+    def clipboard_get(self):
+        try:
+            t = Clipboard.paste()
+            if t:
+                return t
+        except Exception:
+            pass
+        try:
+            from pyobjus import autoclass
+            pb = autoclass("UIPasteboard").generalPasteboard()
+            s = pb.string()
+            if s:
+                return str(s)
+        except Exception:
+            pass
+        return ""
+
+    def act_paste_links(self):
+        t = self.clipboard_get()
+        if not t:
+            self.log("⚠️ Bộ nhớ tạm đang trống — copy link trước đã")
+            return
+        self.in_links.text = t
+        self.log("📋 Đã dán link — bấm 'Lấy thông tin video'")
+
+    def act_paste_code_clip(self):
+        t = self.clipboard_get()
+        if not t:
+            self.log("⚠️ Bộ nhớ tạm đang trống — copy link chứa code= trước đã")
+            return
+        self.in_paste.text = t
+        self.act_paste_code()
+
 
     # ---------- Screen 2: video ----------
     def scr_video(self):
@@ -783,7 +827,9 @@ class StudioApp(App):
         c = card(p, "Link video")
         c.add_widget(L("Mỗi dòng 1 link, hoặc chỉ 1 link", kind="sub"))
         self.in_links = I("https://youtu.be/...", multiline=True, height=110)
+        self.in_links.text = self.cfg.get("links_text", "")
         c.add_widget(self.in_links)
+        c.add_widget(B("📋 Dán link từ bộ nhớ", self.act_paste_links))
         c.add_widget(B("🔎 Lấy thông tin video", self.act_fetch, variant="primary"))
         c.add_widget(B("⏬ Lấy video mới nhất của kênh tôi", self.act_latest))
         c2 = card(p, "Thông tin video")
@@ -813,13 +859,14 @@ class StudioApp(App):
             self.log("⚠️ Chưa nhập link video")
             return
         key = self.cfg.get("yt_api_key", "")
-        self.bg(lambda: core.fetch_video(links[0], key or None), self._set_video)
+        self.log("Đang đọc thông tin video…")
+        self.bg(lambda: core.fetch_video(links[0], key), self._set_video)
 
     def act_latest(self):
         up = self.uploader()
         def work():
             vid = up.latest_video_id()
-            return core.fetch_video(vid, self.cfg.get("yt_api_key", "") or None)
+            return core.fetch_video(vid, self.cfg.get("yt_api_key", ""))
         self.bg(work, self._set_video)
 
     # ---------- Screen 3: AI titles ----------
@@ -934,6 +981,7 @@ class StudioApp(App):
         row2.add_widget(self.sp_preset)
         c.add_widget(row2)
         self.in_custom = I("Mã tùy chọn, cách nhau bằng dấu phẩy (vd: ja,ko,fr) — chỉ khi chọn 'Tùy chọn'")
+        self.in_custom.text = self.cfg.get("custom_text", "")
         c.add_widget(self.in_custom)
         row3 = BoxLayout(size_hint_y=None, height=dp(40))
         self.cb_skip = CheckBox(size_hint_x=None, width=dp(40), active=True,
@@ -994,7 +1042,7 @@ class StudioApp(App):
         def work():
             return core.translate_many(title, desc, targets, engine, cfg,
                                        self.video.default_language or "auto",
-                                       log=self.log, on_progress=prog)
+                                       log=self.log, progress=prog)
         def done(results):
             self.all_results[vid] = results
             self.pb.value = 100
