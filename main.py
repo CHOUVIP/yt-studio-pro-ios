@@ -162,7 +162,7 @@ class StudioApp(App):
 
     def refresh_quota(self):
         if hasattr(self, "quota_label"):
-            self.quota_label.text = f"Quota hôm nay: {self.quota.used} / 10.000"
+            self.quota_label.text = f"Quota hôm nay: {self.quota.units} / 10.000"
 
     def goto(self, name):
         self.sm.current = name
