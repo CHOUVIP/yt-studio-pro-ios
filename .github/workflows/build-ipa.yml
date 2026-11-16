@@ -18,9 +18,11 @@ jobs:
           python-version: "3.11"
       - name: Install build tools
         run: |
-          brew install autoconf automake libtool pkg-config || true
+          brew install autoconf automake libtool pkg-config
           python -m pip install --upgrade pip
-          pip install cython kivy-ios pillow
+          python -m pip install cython kivy-ios pillow
+          which cython pkg-config autoconf automake libtool
+          cython --version
       - name: Build Python + Kivy for iOS (toolchain)
         run: |
           toolchain build python3 kivy pyobjus openssl sqlite3 requests
